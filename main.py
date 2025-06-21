@@ -1,14 +1,29 @@
 import pandas as pd
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from langchain.agents import initialize_agent, Tool
 from langchain.chat_models import ChatOpenAI
 from langchain.tools import tool
+from dotenv import load_dotenv
 import os
+
+# Load environment variables from .env file
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+if not OPENAI_API_KEY:
+    raise EnvironmentError("OPENAI_API_KEY not set in .env file")
+
+# Set OpenAI key for LangChain's use
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 # Load energy plans data
 ENERGY_PLANS_CSV = "data/energy_plans.csv"
-plans_df = pd.read_csv(ENERGY_PLANS_CSV)
+
+try:
+    plans_df = pd.read_csv(ENERGY_PLANS_CSV)
+except FileNotFoundError:
+    raise FileNotFoundError(f" CSV not found: {ENERGY_PLANS_CSV}")
 
 # Define a custom tool
 @tool
@@ -33,5 +48,8 @@ class UserInput(BaseModel):
 
 @app.post("/query")
 async def query_agent(user_input: UserInput):
-    response = agent.run(user_input.prompt)
-    return {"response": response}
+    try:
+        response = agent.run(user_input.prompt)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
